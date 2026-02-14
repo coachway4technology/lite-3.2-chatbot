@@ -8,10 +8,9 @@ import os
 # =========================
 load_dotenv()
 
-API_KEY = os.getenv("GEMINI_API_KEY")
+API_KEY = "GEMINI_API_KEY"
 
-if not API_KEY:
-    API_KEY="AIzaSyAJd6jRNY8ZvDhw3s0UWe5dYpePp1lrm4k"
+
 
 # =========================
 # 🚀 FLASK APP
@@ -77,5 +76,6 @@ def chat():
     })
 
 if __name__ == "__main__":
-    print("🚀 Running at http://127.0.0.1:5000")
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 10000))  # Render dynamic port
+    print(f"🚀 Running on port {port}")
+    app.run(host="0.0.0.0", port=port)
