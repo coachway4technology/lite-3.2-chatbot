@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Lite Chatbot 4.0</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body class="dark">
+
+<!-- ===== HOME SCREEN ===== -->
+<div id="home" class="home-screen">
+    <h1>Lite Chatbot 4.0</h1>
+    <p>Fast • Neon • Private</p>
+    <button onclick="enterChat()">Start Chat</button>
+</div>
+
+<!-- ===== CHAT UI ===== -->
+<div class="chat-container hidden" id="chatUI">
+
+<h2>Lite Chatbot 4.0</h2>
+
+<!-- PROFILE -->
+<div class="profile">
+    <input id="username" placeholder="Your name">
+    <select id="language">
+        <option>English</option>
+        <option>Tamil</option>
+        <option>Hindi</option>
+    </select>
+    <button onclick="saveProfile()">Save</button>
+</div>
+
+<!-- CONTROLS -->
+<div class="controls">
+    <input id="search" placeholder="Search chat" oninput="searchChat()">
+    <button onclick="toggleTheme()">🌙 / ☀️</button>
+    <button onclick="importPDF()">📥 PDF</button>
+    <button onclick="exportPDF()">📤 PDF</button>
+    <button onclick="clearChat()">🗑</button>
+    <button onclick="openSettings()">⚙️</button>
+    <button onclick="openAdmin()">🛠</button>
+</div>
+
+<!-- CHAT -->
+<div id="chat-box"></div>
+
+<!-- INPUT -->
+<div class="input-area">
+    <button onclick="startVoice()">🎤</button>
+    <input id="message" placeholder="Type message">
+    <button onclick="sendMessage()">Send</button>
+    <button onclick="rewriteLast()">✏️</button>
+</div>
+
+<div class="footer">
+Tokens: <span id="tokens">0</span> / 1000
+</div>
+
+<input type="file" id="fileInput" accept="application/pdf" hidden>
+
+</div>
+
+<!-- ===== SETTINGS PANEL ===== -->
+<div id="settings" class="modal hidden">
+    <h3>Settings</h3>
+    <label>Text Size</label>
+    <input type="range" min="14" max="22" value="16" oninput="setTextSize(this.value)">
+    <button onclick="closeSettings()">Close</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+/* ===== CORE STATE ===== */
+const chatBox = document.getElementById("chat-box");
+const messageInput = document.getElementById("message");
+const tokensLabel = document.getElementById("tokens");
+
+let sessionHistory = [];
+let tempMemory = "";
+let lastUserMessage = "";
+let tokensUsed = 0;
+let adminUnlocked = false;
+
+const TOKEN_LIMIT = 1000;
+const ADMIN_KEY = "laksith";
+
+/* ===== HOME ===== */
+function enterChat(){
+    home.classList.add("hidden");
+    chatUI.classList.remove("hidden");
+}
+
+/* ===== PROFILE ===== */
+function saveProfile(){
+    localStorage.setItem("profile", JSON.stringify({
+        name: username.value,
+        language: language.value,
+        theme: document.body.className
+    }));
+}
+(function(){
+    const p = JSON.parse(localStorage.getItem("profile")||"{}");
+    if(p.name) username.value=p.name;
+    if(p.language) language.value=p.language;
+    if(p.theme) document.body.className=p.theme;
+})();
+
+/* ===== TOKENS ===== */
+function addTokens(text){
+    tokensUsed += Math.ceil(text.length/4);
+    tokensLabel.innerText = tokensUsed;
+
+    if(tokensUsed > TOKEN_LIMIT && !adminUnlocked){
+        const key = prompt("Admin key:");
+        if(key===ADMIN_KEY){
+            adminUnlocked=true;
+            alert("Admin unlocked +1000 tokens");
+        } else {
+            endSession();
+        }
+    }
+}
+function endSession(){
+    alert("Session ended");
+    document.querySelectorAll("input,button").forEach(b=>b.disabled=true);
+}
+
+/* ===== CHAT ===== */
+function addBubble(type,text){
+    const div=document.createElement("div");
+    div.className="bubble "+type;
+    div.innerText=text;
+    chatBox.appendChild(div);
+    chatBox.scrollTop=chatBox.scrollHeight;
+}
+
+async function sendMessage(){
+    const msg=messageInput.value.trim();
+    if(!msg) return;
+
+    addBubble("user",msg);
+    sessionHistory.push("Me: "+msg);
+    lastUserMessage=msg;
+    addTokens(msg);
+    messageInput.value="";
+
+    addBubble("ai","Typing…");
+
+    const res=await fetch("/chat",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({message: msg + "\n\nMemory:\n"+tempMemory})
+    });
+
+    const data=await res.json();
+    chatBox.lastChild.remove();
+    addBubble("ai",data.reply);
+    sessionHistory.push("AI: "+data.reply);
+    addTokens(data.reply);
+}
+
+/* ===== REWRITE ===== */
+function rewriteLast(){
+    if(!lastUserMessage) return;
+    messageInput.value = lastUserMessage;
+}
+
+/* ===== SEARCH ===== */
+function searchChat(){
+    const q=search.value.toLowerCase();
+    document.querySelectorAll(".bubble").forEach(b=>{
+        b.style.opacity=b.innerText.toLowerCase().includes(q)?1:0.3;
+    });
+}
+
+/* ===== CLEAR ===== */
+function clearChat(){
+    chatBox.innerHTML="";
+    sessionHistory=[];
+}
+
+/* ===== PDF EXPORT ===== */
+function exportPDF(){
+    const { jsPDF } = window.jspdf;
+    const pdf=new jsPDF();
+    let y=10;
+    sessionHistory.forEach(l=>{
+        pdf.text(l,10,y);
+        y+=8;
+        if(y>280){pdf.addPage();y=10;}
+    });
+    pdf.save("chat.pdf");
+}
+
+/* ===== PDF IMPORT (TEMP MEMORY) ===== */
+function importPDF(){
+    fileInput.click();
+}
+fileInput.onchange=async e=>{
+    tempMemory="Imported chat memory:\n";
+    tempMemory+="[PDF loaded]";
+    alert("PDF imported as temporary memory");
+};
+
+/* ===== THEME ===== */
+function toggleTheme(){
+    document.body.className=document.body.className==="dark"?"light":"dark";
+    saveProfile();
+}
+
+/* ===== VOICE ===== */
+function startVoice(){
+    const r=new webkitSpeechRecognition();
+    r.lang="en-US";
+    r.start();
+    r.onresult=e=>messageInput.value=e.results[0][0].transcript;
+}
+
+/* ===== SETTINGS ===== */
+function openSettings(){settings.classList.remove("hidden");}
+function closeSettings(){settings.classList.add("hidden");}
+function setTextSize(v){
+    document.documentElement.style.fontSize=v+"px";
+}
+
+/* ===== ADMIN ===== */
+function openAdmin(){
+    const key=prompt("Admin key:");
+    if(key!==ADMIN_KEY) return alert("Denied");
+    alert(
+        "ADMIN PANEL\n\n"+
+        "Tokens: "+tokensUsed+"\n"+
+        "Messages: "+sessionHistory.length
+    );
+}
+</script>
+
+</body>
+</html>
