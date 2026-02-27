@@ -4,10 +4,13 @@ from dotenv import load_dotenv
 import os
 
 # =========================
-# LOAD ENV
+# LOAD ENV VARIABLES
 # =========================
 load_dotenv()
-API_KEY = "GEMINI_API_KEY"
+API_KEY = "GEMINI_API_KEY"  
+
+if not API_KEY:
+    raise ValueError("❌ GEMINI_API_KEY not set in environment variables")
 
 # =========================
 # FLASK APP
@@ -18,10 +21,11 @@ app = Flask(__name__)
 # GEMINI CLIENT
 # =========================
 client = genai.Client(api_key=API_KEY)
-
-# 👉 Change model here easily
 MODEL_NAME = "gemini-2.5-flash"
 
+# =========================
+# ROUTES
+# =========================
 @app.route("/")
 def home():
     return render_template("index.html")
@@ -32,18 +36,29 @@ def chat():
     user_msg = data.get("message", "").strip()
 
     if not user_msg:
-        return jsonify({"reply": "Please type a message."})
+        return jsonify({"reply": "⚠️ Empty message received"})
 
-    response = client.models.generate_content(
-        model=MODEL_NAME,
-        contents=user_msg
-    )
+    try:
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=user_msg
+        )
 
-    return jsonify({
-        "reply": response.text.strip(),
-        "model": MODEL_NAME
-    })
+        if not response or not response.text:
+            print("❌ MODEL RETURNED EMPTY RESPONSE")
+            print("User input:", user_msg)
+            return jsonify({"reply": "⚠️ Model returned no response."})
 
+        return jsonify({"reply": response.text.strip()})
+
+    except Exception as e:
+        print("❌ MODEL ERROR:", e)
+        return jsonify({"reply": "⚠️ Internal model error."})
+
+
+# =========================
+# RENDER PORT CONFIG
+# =========================
 if __name__ == "__main__":
-    print("🚀 Running at http://127.0.0.1:5000")
-    app.run(debug=True)
+    port = int(os.environ.get("PORT", 5000))  # ✅ Render dynamic port
+    app.run(host="0.0.0.0", port=port)

@@ -5,7 +5,6 @@ body.light{background:#f5f6f8;color:#111}
 
 .hidden{display:none}
 
-/* HOME */
 .home-screen{
     height:100vh;
     display:flex;
@@ -15,7 +14,6 @@ body.light{background:#f5f6f8;color:#111}
     gap:10px
 }
 
-/* CHAT */
 .chat-container{
     max-width:900px;
     height:95vh;
@@ -49,7 +47,10 @@ button{
     cursor:pointer
 }
 
-button:hover{transform:translateY(-1px)}
+button:disabled{
+    opacity:.5;
+    cursor:not-allowed
+}
 
 #chat-box{
     flex:1;
@@ -66,31 +67,23 @@ button:hover{transform:translateY(-1px)}
     border-radius:14px
 }
 
-.user{
-    background:#4f8cff;
-    color:white;
-    margin-left:auto
-}
+.user{background:#4f8cff;color:white;margin-left:auto}
+.ai{background:#1f2937;color:#eaeaea;margin-right:auto}
+.warning{background:#7c2d12;color:#fff;font-size:13px}
 
-.ai{
-    background:#1f2937;
-    color:#eaeaea;
-    margin-right:auto
-}
+.footer{font-size:12px;text-align:right;opacity:.7}
 
-.footer{
-    font-size:12px;
-    text-align:right;
-    opacity:.7
-}
-
-/* MODAL */
 .modal{
     position:fixed;
-    top:30%;
+    top:50%;
     left:50%;
-    transform:translate(-50%,-30%);
+    transform:translate(-50%,-50%);
     background:#111;
-    padding:20px;
-    border-radius:12px
+    padding:24px;
+    border-radius:14px;
+    width:80%;
+    max-width:900px;
+    max-height:80vh;
+    overflow-y:auto;
+    z-index:20
 }

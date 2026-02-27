@@ -2,240 +2,324 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Lite Chatbot 4.o</title>
+<title>Lite Chatbot 4.0</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 
 <body class="dark">
 
-<!-- ===== HOME SCREEN ===== -->
+<!-- HOME -->
 <div id="home" class="home-screen">
     <h1>Lite Chatbot 4.0</h1>
     <p>Fast • Neon • Private</p>
     <button onclick="enterChat()">Start Chat</button>
 </div>
 
-<!-- ===== CHAT UI ===== -->
-<div class="chat-container hidden" id="chatUI">
-
-<h2>Lite Chatbot 4.0</h2>
+<!-- CHAT -->
+<div id="chatUI" class="chat-container hidden">
+<h2>Lite Chatbot 5.2</h2>
 
 <!-- PROFILE -->
 <div class="profile">
-    <input id="username" placeholder="Your name">
-    <select id="language">
-        <option>English</option>
-        <option>Tamil</option>
-        <option>Hindi</option>
-    </select>
-    <button onclick="saveProfile()">Save</button>
+    <input id="username" placeholder="Your name" onchange="updateUsername()">
+    <select id="userHistory" onchange="selectUsername()"></select>
 </div>
 
 <!-- CONTROLS -->
 <div class="controls">
     <input id="search" placeholder="Search chat" oninput="searchChat()">
-    <button onclick="toggleTheme()">🌙 / ☀️</button>
+    <button onclick="toggleTheme()">🌙</button>
     <button onclick="importPDF()">📥 PDF</button>
     <button onclick="exportPDF()">📤 PDF</button>
     <button onclick="clearChat()">🗑</button>
     <button onclick="openSettings()">⚙️</button>
     <button onclick="openAdmin()">🛠</button>
+    <button onclick="openCommands()">❔</button>
 </div>
 
-<!-- CHAT -->
+<!-- CHAT BOX -->
 <div id="chat-box"></div>
 
 <!-- INPUT -->
 <div class="input-area">
     <button onclick="startVoice()">🎤</button>
     <input id="message" placeholder="Type message">
-    <button onclick="sendMessage()">Send</button>
-    <button onclick="rewriteLast()">✏️</button>
+    <button id="sendBtn" onclick="sendMessage()">Send</button>
 </div>
 
-<div class="footer">
-Tokens: <span id="tokens">0</span> / 1000
-</div>
+<div class="footer">Tokens: <span id="tokens">0</span></div>
 
 <input type="file" id="fileInput" accept="application/pdf" hidden>
 
 </div>
 
-<!-- ===== SETTINGS PANEL ===== -->
+<!-- SETTINGS -->
 <div id="settings" class="modal hidden">
     <h3>Settings</h3>
-    <label>Text Size</label>
     <input type="range" min="14" max="22" value="16" oninput="setTextSize(this.value)">
     <button onclick="closeSettings()">Close</button>
 </div>
 
+<!-- COMMANDS -->
+<div id="commands" class="modal hidden">
+    <h3>Commands</h3>
+    <ul>
+        <li>remember this</li>
+        <li>save this</li>
+        <li>my name is</li>
+        <li>I like</li>
+    </ul>
+    <button onclick="closeCommands()">Close</button>
+</div>
+
+<!-- ADMIN -->
+<div id="admin" class="modal hidden"></div>
+
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
 <script>
-/* ===== CORE STATE ===== */
+/* ================= GLOBAL ================= */
 const chatBox = document.getElementById("chat-box");
 const messageInput = document.getElementById("message");
+const sendBtn = document.getElementById("sendBtn");
 const tokensLabel = document.getElementById("tokens");
 
-let sessionHistory = [];
+let cooldownActive = false;
+let queuedMessage = null;
+
 let tempMemory = "";
-let lastUserMessage = "";
-let tokensUsed = 0;
-let adminUnlocked = false;
+let memoryStored = false;
+let sessionTokens = 0;
 
-const TOKEN_LIMIT = 1000;
-const ADMIN_KEY = "laksith";
+/* ================= USER SESSION ================= */
+let currentUser = sessionStorage.getItem("currentUser") || "";
+let sessionUsers = JSON.parse(sessionStorage.getItem("sessionUsers") || "[]");
 
-/* ===== HOME ===== */
+/* ================= ADMIN DATA (PERSISTENT) ================= */
+let adminData = JSON.parse(localStorage.getItem("adminData") || "{}");
+adminData.users ||= [];
+adminData.totalTokens ||= 0;
+adminData.tokenOveruse ||= {};
+adminData.leaks ||= {};
+saveAdmin();
+
+/* ================= INIT ================= */
+(function init(){
+    if(currentUser) username.value = currentUser;
+    sessionUsers.forEach(addUserOption);
+})();
+
+function saveAdmin(){
+    localStorage.setItem("adminData", JSON.stringify(adminData));
+}
+
+function addUserOption(name){
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    userHistory.appendChild(opt);
+}
+
+/* ================= HOME ================= */
 function enterChat(){
     home.classList.add("hidden");
     chatUI.classList.remove("hidden");
 }
 
-/* ===== PROFILE ===== */
-function saveProfile(){
-    localStorage.setItem("profile", JSON.stringify({
-        name: username.value,
-        language: language.value,
-        theme: document.body.className
-    }));
-}
-(function(){
-    const p = JSON.parse(localStorage.getItem("profile")||"{}");
-    if(p.name) username.value=p.name;
-    if(p.language) language.value=p.language;
-    if(p.theme) document.body.className=p.theme;
-})();
+/* ================= USERNAME ================= */
+function updateUsername(){
+    const name = username.value.trim();
+    if(!name) return;
 
-/* ===== TOKENS ===== */
-function addTokens(text){
-    tokensUsed += Math.ceil(text.length/4);
-    tokensLabel.innerText = tokensUsed;
+    currentUser = name;
+    sessionStorage.setItem("currentUser", name);
 
-    if(tokensUsed > TOKEN_LIMIT && !adminUnlocked){
-        const key = prompt("Admin key:");
-        if(key===ADMIN_KEY){
-            adminUnlocked=true;
-            alert("Admin unlocked +1000 tokens");
-        } else {
-            endSession();
-        }
+    if(!sessionUsers.includes(name)){
+        sessionUsers.push(name);
+        sessionStorage.setItem("sessionUsers", JSON.stringify(sessionUsers));
+        addUserOption(name);
+    }
+
+    if(!adminData.users.includes(name)){
+        adminData.users.push(name);
+        saveAdmin();
     }
 }
-function endSession(){
-    alert("Session ended");
-    document.querySelectorAll("input,button").forEach(b=>b.disabled=true);
+
+function selectUsername(){
+    currentUser = userHistory.value;
+    username.value = currentUser;
+    sessionStorage.setItem("currentUser", currentUser);
 }
 
-/* ===== CHAT ===== */
+/* ================= CHAT ================= */
 function addBubble(type,text){
-    const div=document.createElement("div");
-    div.className="bubble "+type;
-    div.innerText=text;
-    chatBox.appendChild(div);
-    chatBox.scrollTop=chatBox.scrollHeight;
+    const d = document.createElement("div");
+    d.className = "bubble " + type;
+    d.innerText = text;
+    chatBox.appendChild(d);
+    chatBox.scrollTop = chatBox.scrollHeight;
+}
+
+/* ===== SAVE INTENT ===== */
+function detectSaveIntent(t){
+    return /(remember this|save this|my name is|i like)/i.test(t);
+}
+
+/* ===== LEAK DETECTION (FULL TEXT) ===== */
+function detectLeak(text){
+    const pass = text.match(/password\s*[:=]\s*(.+)/i);
+    if(pass){
+        return { type:"Password", value:pass[0] };
+    }
+
+    const sensitive = text.match(/[$%^&*]{2,}[A-Za-z0-9]+|[A-Za-z0-9]+[$%^&*]{2,}/);
+    if(sensitive){
+        return { type:"Sensitive string", value:sensitive[0] };
+    }
+
+    return null;
 }
 
 async function sendMessage(){
-    const msg=messageInput.value.trim();
-    if(!msg) return;
+    const msg = messageInput.value.trim();
+    if(!msg || !currentUser) return;
 
-    addBubble("user",msg);
-    sessionHistory.push("Me: "+msg);
-    lastUserMessage=msg;
-    addTokens(msg);
+    if(cooldownActive){
+        queuedMessage = msg;
+        addBubble("warning","⏳ Please wait, loading answer…");
+        messageInput.value="";
+        return;
+    }
+
+    cooldownActive = true;
+    sendBtn.disabled = true;
+
+    addBubble("user", msg);
     messageInput.value="";
+
+    const used = Math.ceil(msg.length/4);
+    sessionTokens += used;
+    adminData.totalTokens += used;
+    tokensLabel.innerText = sessionTokens;
+
+    if(detectSaveIntent(msg) && !memoryStored){
+        tempMemory += msg + "\n";
+        memoryStored = true;
+        addBubble("warning","🧠 Saved for this session.");
+    }
+
+    const leak = detectLeak(msg);
+    if(leak){
+        adminData.leaks[currentUser] ||= [];
+        adminData.leaks[currentUser].push({
+            type: leak.type,
+            text: leak.value,
+            time: new Date().toLocaleString()
+        });
+        saveAdmin();
+        addBubble("warning",`⚠️ Sensitive info detected (${leak.type})`);
+    }
 
     addBubble("ai","Typing…");
 
-    const res=await fetch("/chat",{
+    const res = await fetch("/chat",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({message: msg + "\n\nMemory:\n"+tempMemory})
+        body:JSON.stringify({message:msg+"\n\nContext:\n"+tempMemory})
     });
 
-    const data=await res.json();
+    const data = await res.json();
     chatBox.lastChild.remove();
-    addBubble("ai",data.reply);
-    sessionHistory.push("AI: "+data.reply);
-    addTokens(data.reply);
+    addBubble("ai", data.reply);
+
+    const rUsed = Math.ceil(data.reply.length/4);
+    sessionTokens += rUsed;
+    adminData.totalTokens += rUsed;
+    tokensLabel.innerText = sessionTokens;
+
+    if(sessionTokens > 1000){
+        adminData.tokenOveruse[currentUser] =
+            (adminData.tokenOveruse[currentUser] || 0) + 1;
+    }
+
+    saveAdmin();
+
+    setTimeout(()=>{
+        cooldownActive=false;
+        sendBtn.disabled=false;
+        if(queuedMessage){
+            messageInput.value = queuedMessage;
+            queuedMessage = null;
+            sendMessage();
+        }
+    },3000);
 }
 
-/* ===== REWRITE ===== */
-function rewriteLast(){
-    if(!lastUserMessage) return;
-    messageInput.value = lastUserMessage;
+/* ================= ADMIN PANEL ================= */
+function openAdmin(){
+    const key = prompt("Admin password:");
+    if(key !== "its-laksith") return alert("Denied");
+
+    let html = `
+    <h3>Admin Panel</h3>
+    <p><b>Total Users:</b> ${adminData.users.length}</p>
+    <p><b>Usernames:</b> ${adminData.users.join(", ")}</p>
+    <p><b>Total Tokens:</b> ${adminData.totalTokens}</p>
+
+    <h4>Token Overuse</h4><ul>`;
+    for(const u in adminData.tokenOveruse){
+        html += `<li>${u}: ${adminData.tokenOveruse[u]} times</li>`;
+    }
+    html += `</ul><h4>Leaks</h4>`;
+
+    for(const u in adminData.leaks){
+        html += `<div><b>${u}</b><ul>`;
+        adminData.leaks[u].forEach(l=>{
+            html += `<li>
+                <b>Type:</b> ${l.type}<br>
+                <b>Text:</b> <code>${l.text}</code><br>
+                <b>Time:</b> ${l.time}
+            </li>`;
+        });
+        html += `</ul></div>`;
+    }
+
+    html += `<button onclick="admin.classList.add('hidden')">Close</button>`;
+    admin.innerHTML = html;
+    admin.classList.remove("hidden");
 }
 
-/* ===== SEARCH ===== */
+/* ================= UTIL ================= */
+function toggleTheme(){document.body.className=document.body.className==="dark"?"light":"dark"}
+function openSettings(){settings.classList.remove("hidden")}
+function closeSettings(){settings.classList.add("hidden")}
+function openCommands(){commands.classList.remove("hidden")}
+function closeCommands(){commands.classList.add("hidden")}
+function setTextSize(v){document.documentElement.style.fontSize=v+"px"}
 function searchChat(){
     const q=search.value.toLowerCase();
     document.querySelectorAll(".bubble").forEach(b=>{
         b.style.opacity=b.innerText.toLowerCase().includes(q)?1:0.3;
     });
 }
-
-/* ===== CLEAR ===== */
-function clearChat(){
-    chatBox.innerHTML="";
-    sessionHistory=[];
-}
-
-/* ===== PDF EXPORT ===== */
+function clearChat(){chatBox.innerHTML=""}
 function exportPDF(){
-    const { jsPDF } = window.jspdf;
-    const pdf=new jsPDF();
-    let y=10;
-    sessionHistory.forEach(l=>{
-        pdf.text(l,10,y);
-        y+=8;
-        if(y>280){pdf.addPage();y=10;}
+    const {jsPDF}=window.jspdf;
+    const pdf=new jsPDF(); let y=10;
+    document.querySelectorAll(".bubble").forEach(b=>{
+        pdf.text(b.innerText,10,y); y+=8;
+        if(y>280){pdf.addPage(); y=10;}
     });
     pdf.save("chat.pdf");
 }
-
-/* ===== PDF IMPORT (TEMP MEMORY) ===== */
-function importPDF(){
-    fileInput.click();
-}
-fileInput.onchange=async e=>{
-    tempMemory="Imported chat memory:\n";
-    tempMemory+="[PDF loaded]";
-    alert("PDF imported as temporary memory");
-};
-
-/* ===== THEME ===== */
-function toggleTheme(){
-    document.body.className=document.body.className==="dark"?"light":"dark";
-    saveProfile();
-}
-
-/* ===== VOICE ===== */
+function importPDF(){fileInput.click()}
 function startVoice(){
     const r=new webkitSpeechRecognition();
     r.lang="en-US";
     r.start();
     r.onresult=e=>messageInput.value=e.results[0][0].transcript;
 }
-
-/* ===== SETTINGS ===== */
-function openSettings(){settings.classList.remove("hidden");}
-function closeSettings(){settings.classList.add("hidden");}
-function setTextSize(v){
-    document.documentElement.style.fontSize=v+"px";
-}
-
-/* ===== ADMIN ===== */
-function openAdmin(){
-    const key=prompt("Admin key:");
-    if(key!==ADMIN_KEY) return alert("Denied");
-    alert(
-        "ADMIN PANEL\n\n"+
-        "Tokens: "+tokensUsed+"\n"+
-        "Messages: "+sessionHistory.length
-    );
-}
 </script>
-
 </body>
 </html>
