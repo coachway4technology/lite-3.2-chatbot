@@ -7,7 +7,7 @@ import os
 # LOAD ENV VARIABLES
 # =========================
 load_dotenv()
-API_KEY = "GEMINI_API_KEY"  
+API_KEY = "AIzaSyBV6LHZsq2LTZEPMQGGA-R4USznlTTh_Cc"  
 
 if not API_KEY:
     raise ValueError("❌ GEMINI_API_KEY not set in environment variables")
@@ -21,7 +21,7 @@ app = Flask(__name__)
 # GEMINI CLIENT
 # =========================
 client = genai.Client(api_key=API_KEY)
-MODEL_NAME = "gemini-2.5-flash"
+MODEL_NAME = "gemini-2.5-flash-lite"
 
 # =========================
 # ROUTES
