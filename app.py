@@ -7,7 +7,7 @@ import os
 # LOAD ENV VARIABLES
 # =========================
 load_dotenv()
-API_KEY = "AIzaSyBV6LHZsq2LTZEPMQGGA-R4USznlTTh_Cc"  
+API_KEY = "GEMINI_API_KEY"  
 
 if not API_KEY:
     raise ValueError("❌ GEMINI_API_KEY not set in environment variables")
