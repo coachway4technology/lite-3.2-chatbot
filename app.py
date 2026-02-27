@@ -1,12 +1,11 @@
 from flask import Flask, render_template, request, jsonify
 from google import genai
-from dotenv import load_dotenv
 import os
 
 # =========================
 # LOAD ENV VARIABLES
 # =========================
-load_dotenv()
+
 API_KEY = "GEMINI_API_KEY"  
 
 if not API_KEY:
